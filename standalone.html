@@ -1,0 +1,975 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>数刷 Scrub · 数据清洗大师</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@300;400&family=Noto+Sans+SC:wght@300;400;500&display=swap');
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#f5f3ef;--card:#faf9f7;--border:#d4cfc8;--bl:#e8e4dd;
+  --text:#2c2c2c;--muted:#8a8580;--light:#b5b0a8;
+  --accent:#5a5248;--ahover:#3d3830;
+  --danger:#8b4513;--success:#4a6741;--warn:#7a6530;
+  --tag:#eae6df;
+}
+body{font-family:'Noto Sans SC','PingFang SC',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;font-size:14px;font-weight:300;line-height:1.7}
+
+/* ── Header ── */
+header{background:var(--card);border-bottom:1px solid var(--border);padding:18px 40px;display:flex;align-items:baseline;gap:12px}
+header h1{font-family:'Noto Serif SC',serif;font-weight:300;font-size:17px;letter-spacing:.1em;color:var(--accent)}
+header .sub{font-size:11px;color:var(--light);letter-spacing:.12em}
+
+/* ── Layout ── */
+.main{max-width:900px;margin:0 auto;padding:28px 20px;display:flex;flex-direction:column;gap:14px}
+
+/* ── Card ── */
+.card{background:var(--card);border:1px solid var(--bl);border-radius:2px}
+.card-hd{padding:12px 20px;border-bottom:1px solid var(--bl);display:flex;align-items:center;justify-content:space-between;gap:12px}
+.card-hd h2{font-family:'Noto Serif SC',serif;font-size:12px;font-weight:400;letter-spacing:.12em;color:var(--accent)}
+.card-hd .step{font-size:10px;color:var(--light);letter-spacing:.08em}
+.card-bd{padding:20px}
+
+/* ── Upload zone ── */
+.drop-zone{
+  border:1px dashed var(--border);border-radius:2px;
+  padding:36px 24px;text-align:center;cursor:pointer;
+  transition:border-color .18s,background .18s;background:var(--bg);
+}
+.drop-zone:hover,.drop-zone.drag{border-color:var(--accent);background:#f0ece4}
+.drop-icon{font-size:22px;margin-bottom:8px;color:var(--light)}
+.drop-zone p{color:var(--muted);font-size:12px}
+.drop-zone p strong{color:var(--accent);font-weight:500}
+#file-input{display:none}
+
+/* File loaded bar — replaces drop zone */
+.file-loaded{
+  display:flex;align-items:center;gap:10px;
+  padding:11px 14px;background:var(--tag);border-radius:2px;
+  font-size:12px;border:1px dashed var(--border);cursor:default;
+  transition:border-color .18s;
+}
+.file-loaded.drag{border-color:var(--accent);background:#f0ece4}
+.file-loaded .fname{font-weight:500;color:var(--accent);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.file-loaded .fmeta{color:var(--muted);white-space:nowrap;font-size:11px}
+.file-del{border:none;background:none;cursor:pointer;color:var(--light);font-size:14px;padding:0 2px;transition:color .15s;line-height:1;flex-shrink:0}
+.file-del:hover{color:var(--danger)}
+
+.stats-row{display:flex;gap:24px;padding:10px 0 2px}
+.stat .val{font-size:19px;font-family:'Noto Serif SC',serif;color:var(--accent)}
+.stat .lbl{font-size:11px;color:var(--muted);letter-spacing:.04em}
+
+/* ── Add-op bar (ABOVE ops card, outside) ── */
+.add-op-bar{
+  display:flex;gap:8px;align-items:center;flex-wrap:wrap;
+}
+.op-type-sel{
+  border:1px solid var(--border);border-radius:2px;padding:7px 10px;
+  font-size:12px;font-family:inherit;font-weight:300;
+  background:var(--card);color:var(--text);outline:none;
+  flex:1;min-width:180px;transition:border-color .15s;cursor:pointer;
+}
+.op-type-sel:focus{border-color:var(--accent)}
+
+/* ── Global action bar (inside ops card, top) ── */
+.global-bar{
+  display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+  padding:11px 18px;background:var(--bg);
+  border-bottom:1px solid var(--bl);
+}
+.global-sep{width:1px;height:16px;background:var(--bl);margin:0 2px;flex-shrink:0}
+
+/* ── Type group ── */
+.type-group{padding:18px 18px 10px}
+.type-group+.type-group{border-top:1px solid var(--bl)}
+.type-group-hd{
+  display:flex;align-items:center;gap:8px;margin-bottom:10px;
+}
+.type-name{
+  font-size:11px;color:var(--muted);letter-spacing:.1em;
+  text-transform:uppercase;flex:1;
+}
+.add-same{
+  border:1px solid var(--border);background:none;cursor:pointer;
+  font-size:11px;color:var(--muted);padding:2px 9px;
+  border-radius:20px;transition:all .15s;letter-spacing:.03em;font-family:inherit;
+}
+.add-same:hover{background:var(--accent);color:white;border-color:var(--accent)}
+
+/* ── Op card — single row ── */
+.op-cards{display:flex;flex-direction:column;gap:5px}
+.op-card{border:1px solid var(--bl);border-radius:2px;background:var(--bg);}
+@keyframes slideDown{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+.op-card.new-anim{animation:slideDown .2s ease forwards}
+
+/* Single row: seq | controls | stat | x */
+.op-row{
+  display:flex;align-items:center;gap:8px;
+  padding:7px 10px;
+}
+.op-icon{
+  width:20px;height:20px;border-radius:2px;
+  display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;background:var(--card);border:1px solid var(--bl);
+  color:var(--accent);
+}
+.op-icon svg{
+  width:13px;height:13px;display:block;
+  stroke:currentColor;fill:none;stroke-width:1.8;
+  stroke-linecap:round;stroke-linejoin:round;
+}
+.op-seq{
+  width:16px;height:16px;border-radius:50%;background:var(--bl);
+  color:var(--muted);font-size:10px;display:flex;align-items:center;
+  justify-content:center;flex-shrink:0;
+}
+.op-controls{display:flex;align-items:center;gap:6px;flex:1;min-width:0;}
+.op-stat{
+  font-size:11px;padding:1px 7px;border-radius:20px;
+  background:var(--tag);color:var(--muted);white-space:nowrap;flex-shrink:0;
+}
+.op-stat.warn{background:#f5f0e3;color:var(--warn)}
+.op-stat.ok{background:#edf3ec;color:var(--success)}
+.op-x{
+  border:none;background:none;cursor:pointer;
+  color:var(--light);font-size:12px;padding:2px 3px;
+  line-height:1;border-radius:2px;transition:color .15s;flex-shrink:0;
+}
+.op-x:hover{color:var(--danger)}
+/* Info result row — shown below main row, only when non-empty */
+.op-info-row{
+  padding:0 10px 7px 34px;font-size:11px;
+}
+.op-info-row:empty{display:none}
+
+/* ── Forms ── */
+.frow{display:flex;gap:6px;align-items:center;flex-wrap:nowrap;flex:1;min-width:0;}
+input[type=text],input[type=number],.sel-single{
+  border:1px solid var(--border);border-radius:2px;padding:5px 8px;
+  font-size:12px;font-family:inherit;font-weight:300;
+  background:var(--card);color:var(--text);outline:none;transition:border-color .15s;
+}
+input[type=text]:focus,input[type=number]:focus,.sel-single:focus{border-color:var(--accent)}
+input[type=number]{width:52px;flex-shrink:0}
+.sel-single{cursor:pointer;min-width:0;}
+
+/* ── Multi-select ── */
+.ms-wrap{position:relative;display:block;width:100%;min-width:0}
+.ms-trigger{
+  border:1px solid var(--border);border-radius:2px;
+  padding:6px 26px 6px 10px;font-size:12px;font-family:inherit;
+  font-weight:300;background:var(--card);cursor:pointer;user-select:none;
+  transition:border-color .15s;width:100%;display:block;
+  overflow:hidden;white-space:nowrap;text-overflow:ellipsis;line-height:1.5;
+}
+.ms-trigger:hover,.ms-wrap.open .ms-trigger{border-color:var(--accent)}
+.ms-arrow{
+  position:absolute;right:8px;top:50%;transform:translateY(-50%);
+  font-size:9px;color:var(--muted);pointer-events:none;transition:transform .15s;
+}
+.ms-wrap.open .ms-arrow{transform:translateY(-50%) rotate(180deg)}
+.ms-drop{
+  display:none;position:absolute;top:calc(100% + 3px);left:0;
+  width:100%;max-height:380px;overflow-y:auto;
+  background:var(--card);border:1px solid var(--border);
+  border-radius:2px;z-index:300;box-shadow:0 6px 20px rgba(0,0,0,.1);
+}
+.ms-wrap.open .ms-drop{display:block}
+.ms-search{
+  padding:8px 10px;border-bottom:1px solid var(--bl);font-size:12px;
+  font-family:inherit;outline:none;
+  border-top:none;border-left:none;border-right:none;
+  background:var(--bg);width:100%;color:var(--text);position:sticky;top:0;z-index:1;
+}
+.ms-opt{
+  padding:8px 10px;cursor:pointer;font-size:12px;
+  display:flex;align-items:center;gap:8px;transition:background .1s;
+}
+.ms-opt:hover{background:var(--bg)}
+.ms-opt.sel{background:#f0ece4}
+.ms-chk{
+  width:13px;height:13px;border:1px solid var(--border);border-radius:2px;
+  flex-shrink:0;display:flex;align-items:center;justify-content:center;
+  font-size:9px;transition:all .1s;color:transparent;
+}
+.ms-opt.sel .ms-chk{background:var(--accent);border-color:var(--accent);color:white}
+.ms-opt-lbl{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text);flex:1}
+.ms-empty{padding:10px;font-size:12px;color:var(--light);text-align:center}
+.ms-tags{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px}
+.ms-tag{
+  display:inline-flex;align-items:center;gap:4px;
+  padding:2px 8px 2px 9px;background:var(--tag);
+  border-radius:20px;font-size:11px;color:var(--accent);
+}
+.ms-tag-x{cursor:pointer;color:var(--muted);font-size:10px;line-height:1;border:none;background:none;padding:0;transition:color .15s}
+.ms-tag-x:hover{color:var(--danger)}
+
+/* ── Info boxes ── */
+.info{padding:7px 11px;border-radius:2px;font-size:12px;color:var(--muted);background:var(--tag);margin-top:8px}
+.info.warn{background:#f5f0e3;color:var(--warn)}
+.info.ok{background:#edf3ec;color:var(--success)}
+
+/* ── Table ── */
+.tbl-wrap{overflow:auto;max-height:240px;border:1px solid var(--bl);border-radius:2px;margin-top:8px}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th{background:var(--tag);padding:6px 10px;text-align:left;font-weight:400;color:var(--accent);border-bottom:1px solid var(--border);position:sticky;top:0;white-space:nowrap}
+td{padding:5px 10px;border-bottom:1px solid var(--bl);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:var(--bg)}
+tr.dup-row td{background:#fdf6f0}
+tr.dup-row:hover td{background:#f9ede2}
+
+/* ── Buttons ── */
+.btn{
+  padding:6px 14px;border:1px solid var(--accent);border-radius:2px;
+  background:transparent;color:var(--accent);font-size:12px;
+  font-family:inherit;font-weight:400;letter-spacing:.04em;
+  cursor:pointer;transition:all .15s;white-space:nowrap;
+}
+.btn:hover{background:var(--accent);color:white}
+.btn.pri{background:var(--accent);color:white}
+.btn.pri:hover{background:var(--ahover)}
+.btn.sm{padding:5px 11px;font-size:11px}
+.btn.danger{border-color:var(--danger);color:var(--danger)}
+.btn.danger:hover{background:var(--danger);color:white}
+.btn:disabled{opacity:.32;cursor:not-allowed;pointer-events:none}
+
+/* ── Config + misc ── */
+.cfg-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.empty-hint{text-align:center;padding:32px;color:var(--light);font-size:12px}
+.toast{
+  position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(12px);
+  background:var(--accent);color:white;padding:7px 16px;border-radius:2px;
+  font-size:12px;opacity:0;transition:all .22s;z-index:999;letter-spacing:.04em;pointer-events:none;
+}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>数刷 Scrub</h1>
+  <span class="sub">数据清洗大师</span>
+</header>
+
+<div class="main">
+
+  <!-- FILE -->
+  <div class="card">
+    <div class="card-hd"><h2>导入文件</h2><span class="step">STEP 01</span></div>
+    <div class="card-bd">
+      <div id="upload-area">
+        <div class="drop-zone" id="drop-zone">
+          <div class="drop-icon">⊞</div>
+          <p><strong>点击选择</strong>或拖拽文件到此处</p>
+          <p style="margin-top:3px">支持 .xlsx · .xls · .csv</p>
+        </div>
+      </div>
+      <input type="file" id="file-input" accept=".xlsx,.xls,.csv">
+      <div id="stats-wrap" style="display:none">
+        <div class="stats-row" id="stats-row"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ADD-OP BAR (outside, above ops card) -->
+  <div id="add-op-wrap" style="display:none">
+    <div class="add-op-bar">
+      <select class="op-type-sel" id="op-type-sel">
+        <option value="">选择操作类型…</option>
+        <option value="dedup">删除相邻重复行（第4列起）</option>
+        <option value="replace">文字替换</option>
+        <option value="delrow">删除含关键词的整行</option>
+        <option value="delcol">删除列</option>
+        <option value="addcol">在某列后添加空白列</option>
+      </select>
+      <button class="btn pri sm" onclick="addOp()">＋ 添加</button>
+    </div>
+  </div>
+
+  <!-- OPS CARD -->
+  <div class="card" id="ops-card" style="display:none">
+    <div class="card-hd"><h2>处理操作</h2><span class="step">STEP 02</span></div>
+
+    <!-- global bar -->
+    <div class="global-bar">
+      <button class="btn sm" onclick="runAll('analyze')">▷ 全部分析</button>
+      <button class="btn sm danger" onclick="runAll('exec')">▶ 全部执行</button>
+      <div class="global-sep"></div>
+      <button class="btn sm" id="btn-undo" onclick="undoLast()" disabled>↩ 撤回</button>
+      <span id="undo-label" style="font-size:11px;color:var(--light)"></span>
+    </div>
+
+    <div id="type-groups"></div>
+    <div id="ops-empty" class="empty-hint" style="display:none">暂无操作，从上方添加</div>
+  </div>
+
+  <!-- CONFIG -->
+  <div class="card">
+    <div class="card-hd"><h2>配置管理</h2><span class="step">STEP 03</span></div>
+    <div class="card-bd">
+      <p style="font-size:12px;color:var(--muted);margin-bottom:12px">导出操作配置（含列名记忆），下次导入新文件后直接复用</p>
+      <div class="cfg-row">
+        <button class="btn pri sm" onclick="exportConfig()">导出配置</button>
+        <button class="btn sm" onclick="document.getElementById('cfg-input').click()">导入配置</button>
+        <button class="btn sm" onclick="clearOps()">清空操作</button>
+        <input type="file" id="cfg-input" accept=".json" style="display:none" onchange="importConfig(event)">
+        <span id="cfg-status" style="font-size:11px;color:var(--muted)"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- EXPORT -->
+  <div class="card">
+    <div class="card-hd"><h2>导出文件</h2><span class="step">STEP 04</span></div>
+    <div class="card-bd">
+      <div style="display:flex;gap:12px;align-items:center">
+        <button class="btn pri" onclick="exportFile()" id="btn-export" disabled>下载处理后的文件</button>
+        <span style="font-size:12px;color:var(--muted)">文件名自动添加「_处理后」标识</span>
+      </div>
+    </div>
+  </div>
+
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+// ══ STATE ══════════════════════════════════════════
+let workingData = [];
+let headers = [];
+let fileName = '';
+let ops = [];
+let opCounter = 0;
+const msI = {};
+let undoStack = [];
+
+const OP_NAMES = {
+  dedup:   '删除相邻重复行',
+  replace: '文字替换',
+  delrow:  '删除含关键词的整行',
+  delcol:  '删除列',
+  addcol:  '在某列后添加空白列',
+};
+const TYPE_ORDER = ['dedup','replace','delrow','delcol','addcol'];
+const OP_ICONS = {
+  dedup: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="6" width="11" height="9" rx="1.5"></rect><rect x="9" y="9" width="11" height="9" rx="1.5"></rect></svg>',
+  replace: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h10"></path><path d="M13 4l4 3-4 3"></path><path d="M17 17H7"></path><path d="M11 14l-4 3 4 3"></path></svg>',
+  delrow: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="1.5"></rect><path d="M4 10h16"></path><path d="M10 14h4"></path></svg>',
+  delcol: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="1.5"></rect><path d="M10 5v14"></path><path d="M14 12h4"></path></svg>',
+  addcol: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="1.5"></rect><path d="M10 5v14"></path><path d="M16 12h4"></path><path d="M18 10v4"></path></svg>',
+};
+
+// ══ UPLOAD ═════════════════════════════════════════
+const fileInput = document.getElementById('file-input');
+
+function initDropZone() {
+  const dz = document.getElementById('drop-zone');
+  if(!dz) return;
+  dz.addEventListener('click', ()=>fileInput.click());
+  dz.addEventListener('dragover', e=>{e.preventDefault();dz.classList.add('drag');});
+  dz.addEventListener('dragleave', ()=>dz.classList.remove('drag'));
+  dz.addEventListener('drop', e=>{e.preventDefault();dz.classList.remove('drag');if(e.dataTransfer.files[0])handleFile(e.dataTransfer.files[0]);});
+}
+initDropZone();
+fileInput.addEventListener('change', e=>{if(e.target.files[0])handleFile(e.target.files[0]);e.target.value='';});
+
+function handleFile(file) {
+  fileName = file.name.replace(/\.(xlsx|xls|csv)$/i,'');
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const wb = XLSX.read(ev.target.result, {type:'array'});
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const data = XLSX.utils.sheet_to_json(ws, {header:1,defval:''});
+    workingData = data.map(r=>[...r]);
+    refreshHeaders();
+    showFileLoaded(file);
+    renderStats();
+    document.getElementById('stats-wrap').style.display = 'block';
+    document.getElementById('add-op-wrap').style.display = 'block';
+    document.getElementById('ops-card').style.display = 'block';
+    document.getElementById('btn-export').disabled = false;
+    ops.forEach(op=>rebuildSelectors(op.id));
+    renderTypeGroups();
+    toast('文件导入成功');
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function showFileLoaded(file) {
+  const area = document.getElementById('upload-area');
+  const rows = workingData.length - 1;
+  area.innerHTML = `
+    <div class="file-loaded" id="file-loaded-bar"
+      ondragover="event.preventDefault();this.classList.add('drag')"
+      ondragleave="this.classList.remove('drag')"
+      ondrop="event.preventDefault();this.classList.remove('drag');if(event.dataTransfer.files[0])handleFile(event.dataTransfer.files[0])">
+      <span style="color:var(--muted);font-size:13px">📄</span>
+      <span class="fname">${esc(file.name)}</span>
+      <span class="fmeta">${rows} 行 · ${headers.length} 列</span>
+      <button class="file-del" onclick="clearFile()" title="移除文件">✕</button>
+    </div>`;
+}
+
+function clearFile() {
+  workingData=[]; headers=[]; fileName='';
+  // restore drop zone
+  document.getElementById('upload-area').innerHTML = `
+    <div class="drop-zone" id="drop-zone">
+      <div class="drop-icon">⊞</div>
+      <p><strong>点击选择</strong>或拖拽文件到此处</p>
+      <p style="margin-top:3px">支持 .xlsx · .xls · .csv</p>
+    </div>`;
+  initDropZone();
+  document.getElementById('stats-wrap').style.display='none';
+  document.getElementById('add-op-wrap').style.display='none';
+  document.getElementById('ops-card').style.display='none';
+  document.getElementById('btn-export').disabled=true;
+  renderStats();
+}
+
+function refreshHeaders(){
+  headers=(workingData[0]||[]).map((h,i)=>h!==''?String(h):`列${i+1}`);
+}
+function renderStats(){
+  const rows=workingData.length-1;
+  const el=document.getElementById('stats-row'); if(!el) return;
+  el.innerHTML=`
+    <div class="stat"><div class="val">${rows<0?0:rows}</div><div class="lbl">数据行</div></div>
+    <div class="stat"><div class="val">${headers.length}</div><div class="lbl">列数</div></div>
+    <div class="stat"><div class="val">${rows>0?(rows*headers.length).toLocaleString():0}</div><div class="lbl">单元格</div></div>`;
+}
+
+// ══ MULTI-SELECT ═══════════════════════════════════
+function msCreate(msId,options,placeholder,containerId,onChange){
+  if(!msI[msId]) msI[msId]={selected:new Set()};
+  Object.assign(msI[msId],{options,placeholder:placeholder||'请选择列…',containerId,onChange:onChange||null});
+  const valid=new Set(options.map(o=>o.value));
+  for(const v of [...msI[msId].selected]) if(!valid.has(v)) msI[msId].selected.delete(v);
+}
+function msRender(msId){
+  const inst=msI[msId]; if(!inst) return;
+  const el=document.getElementById(inst.containerId); if(!el) return;
+  const sel=[...inst.selected];
+  const trigTxt=sel.length===0
+    ?`<span style="color:var(--light)">${inst.placeholder}</span>`
+    :`<span style="color:var(--accent)">${sel.map(v=>msLbl(msId,v)).join('、')}</span>`;
+  el.innerHTML=`
+    <div class="ms-wrap" id="msw-${msId}">
+      <div class="ms-trigger" onclick="msTrigger('${msId}')">${trigTxt}</div>
+      <span class="ms-arrow">▼</span>
+      <div class="ms-drop">
+        <input class="ms-search" placeholder="搜索列名…" oninput="msFilter('${msId}',this.value)" onclick="event.stopPropagation()">
+        <div id="mso-${msId}">${msRenderOpts(msId,inst.options)}</div>
+      </div>
+    </div>`;
+  // tags go into op-info-row (extract opId from msId: dc-{id})
+  const opId=msId.startsWith('dc-')?msId.slice(3):null;
+  if(opId){
+    const infoEl=document.getElementById(`op-info-${opId}`);
+    if(infoEl){
+      infoEl.innerHTML=sel.length
+        ?`<div class="ms-tags">${sel.map(v=>`<span class="ms-tag">${msLbl(msId,v)}<button class="ms-tag-x" onclick="msRm('${msId}','${v}')">✕</button></span>`).join('')}</div>`
+        :'';
+    }
+  }
+}
+function msRenderOpts(msId,opts){
+  if(!opts.length) return '<div class="ms-empty">暂无数据</div>';
+  const inst=msI[msId];
+  return opts.map(o=>`<div class="ms-opt${inst.selected.has(o.value)?' sel':''}" onclick="msPick('${msId}','${o.value}',event)"><div class="ms-chk">${inst.selected.has(o.value)?'✓':''}</div><span class="ms-opt-lbl">${esc(o.label)}</span></div>`).join('');
+}
+function msLbl(msId,v){return msI[msId]?.options.find(o=>o.value===v)?.label||v;}
+window.msTrigger=function(msId){
+  const wrap=document.getElementById(`msw-${msId}`); if(!wrap) return;
+  const was=wrap.classList.contains('open'); msCloseAll();
+  if(!was){wrap.classList.add('open');const s=wrap.querySelector('.ms-search');if(s){s.value='';msFilter(msId,'');setTimeout(()=>s.focus(),30);}}
+};
+function msCloseAll(){document.querySelectorAll('.ms-wrap.open').forEach(el=>el.classList.remove('open'));}
+document.addEventListener('click',e=>{if(!e.target.closest('.ms-wrap'))msCloseAll();});
+window.msFilter=function(msId,q){
+  const inst=msI[msId]; if(!inst) return;
+  const el=document.getElementById(`mso-${msId}`); if(!el) return;
+  const f=q?inst.options.filter(o=>o.label.toLowerCase().includes(q.toLowerCase())):inst.options;
+  el.innerHTML=f.length?msRenderOpts(msId,f):'<div class="ms-empty">无匹配</div>';
+};
+window.msPick=function(msId,value,event){
+  event.stopPropagation();
+  const inst=msI[msId]; if(!inst) return;
+  inst.selected.has(value)?inst.selected.delete(value):inst.selected.add(value);
+  msRender(msId);
+  const wrap=document.getElementById(`msw-${msId}`);
+  if(wrap){wrap.classList.add('open');const s=wrap.querySelector('.ms-search');if(s)msFilter(msId,s.value);}
+  if(inst.onChange) inst.onChange();
+};
+window.msRm=function(msId,value){
+  const inst=msI[msId]; if(!inst) return;
+  inst.selected.delete(value); msRender(msId);
+  if(inst.onChange) inst.onChange();
+};
+function msGet(msId){return[...(msI[msId]?.selected||[])];}
+function msSet(msId,values){const inst=msI[msId];if(!inst)return;inst.selected.clear();values.forEach(v=>inst.selected.add(v));}
+function colOpts(){return headers.map((h,i)=>({value:String(i),label:h}));}
+
+// ══ UNDO ══════════════════════════════════════════
+function pushUndo(desc){
+  undoStack.push({data:workingData.map(r=>[...r]),desc});
+  renderUndoState();
+}
+function undoLast(){
+  if(!undoStack.length) return;
+  const snap=undoStack.pop();
+  workingData=snap.data; afterChange(); renderUndoState();
+  // reset op statuses
+  ops.forEach(op=>{setStatus(op.id,'待分析','');setInfo(op.id,'');});
+  toast(`已撤回：${snap.desc}`);
+}
+function renderUndoState(){
+  const btn=document.getElementById('btn-undo');
+  const lbl=document.getElementById('undo-label');
+  if(btn) btn.disabled=undoStack.length===0;
+  if(lbl) lbl.textContent=undoStack.length>0?`可撤回 ${undoStack.length} 步`:'';
+}
+
+// ══ RENDER TYPE GROUPS ════════════════════════════
+function renderTypeGroups(){
+  const container=document.getElementById('type-groups'); if(!container) return;
+  const grouped={};
+  TYPE_ORDER.forEach(t=>grouped[t]=[]);
+  ops.forEach(op=>{if(grouped[op.type])grouped[op.type].push(op);});
+
+  let html='';
+  TYPE_ORDER.forEach(type=>{
+    const group=grouped[type]; if(!group.length) return;
+    html+=`<div class="type-group" id="tg-${type}">
+      <div class="type-group-hd">
+        <span class="type-name">${OP_NAMES[type]}</span>
+        <button class="add-same" onclick="addOpOfType('${type}')">＋ 再添一条</button>
+      </div>
+      <div class="op-cards" id="tg-cards-${type}">
+        ${group.map((op,idx)=>opCardHTML(op,idx+1)).join('')}
+      </div>
+    </div>`;
+  });
+  container.innerHTML=html;
+
+  // init multi-selects
+  ops.filter(op=>op.type==='delcol').forEach(op=>{
+    msCreate(`dc-${op.id}`,colOpts(),'请选择要删除的列…',`ms-c-${op.id}`,()=>saveDelColParams(op.id));
+    if(op.params?.colHeaders?.length) restoreDelColSel(op.id,op.params.colHeaders);
+    else msRender(`dc-${op.id}`);
+  });
+
+  // restore delrow saved col
+  ops.filter(op=>op.type==='delrow').forEach(op=>{
+    const sel=document.getElementById(`delrow-col-${op.id}`); if(!sel) return;
+    if(op.params?.colHeader==='__any__') sel.value='__any__';
+    else if(op.params?.colHeader){const i=headers.indexOf(op.params.colHeader);if(i>=0)sel.value=String(i);}
+  });
+  // restore addcol
+  ops.filter(op=>op.type==='addcol').forEach(op=>{
+    const sel=document.getElementById(`addcol-after-${op.id}`); if(!sel||!op.params?.afterColHeader) return;
+    const i=headers.indexOf(op.params.afterColHeader); if(i>=0) sel.value=String(i);
+  });
+
+  document.getElementById('ops-empty').style.display=ops.length===0?'block':'none';
+}
+
+function opCardHTML(op, seqInGroup){
+  return `<div class="op-card" id="op-${op.id}">
+    <div class="op-row">
+      <div class="op-icon" title="${esc(OP_NAMES[op.type]||'操作')}">${OP_ICONS[op.type]||''}</div>
+      <div class="op-seq">${seqInGroup}</div>
+      <div class="op-controls">${controlsHTML(op)}</div>
+      <span class="op-stat" id="op-stat-${op.id}">${op.statusText||'待分析'}</span>
+      <button class="op-x" onclick="removeOp(${op.id})">✕</button>
+    </div>
+    <div class="op-info-row" id="op-info-${op.id}"></div>
+  </div>`;
+}
+
+function controlsHTML(op){
+  const id=op.id;
+  if(op.type==='dedup'){
+    return `<span style="font-size:12px;color:var(--light)">第4列起相邻行完全相同则删除</span>`;
+  }
+  if(op.type==='replace'){
+    return `<div class="frow">
+      <input type="text" id="rep-from-${id}" placeholder="查找" value="${esc(op.params?.from||'')}" style="flex:1;min-width:80px">
+      <span style="color:var(--light);font-size:12px;flex-shrink:0">→</span>
+      <input type="text" id="rep-to-${id}" placeholder="替换为（空则删除）" value="${esc(op.params?.to||'')}" style="flex:1.4;min-width:80px">
+    </div>`;
+  }
+  if(op.type==='delrow'){
+    const colOH=headers.map((h,i)=>`<option value="${i}">${esc(h)}</option>`).join('')+'<option value="__any__">任意列</option>';
+    return `<div class="frow">
+      <select class="sel-single" id="delrow-col-${id}" style="flex:1;min-width:0">${colOH}</select>
+      <span style="color:var(--light);font-size:12px;flex-shrink:0">含</span>
+      <input type="text" id="delrow-kw-${id}" placeholder="关键词" value="${esc(op.params?.kw||'')}" style="flex:1.5;min-width:60px">
+      <span style="color:var(--light);font-size:12px;flex-shrink:0">则删行</span>
+    </div>`;
+  }
+  if(op.type==='delcol'){
+    return `<div id="ms-c-${id}" style="flex:1;min-width:0"></div>`;
+  }
+  if(op.type==='addcol'){
+    const colOH=headers.map((h,i)=>`<option value="${i}">${esc(h)}</option>`).join('');
+    return `<div class="frow">
+      <select class="sel-single" id="addcol-after-${id}" style="flex:1;min-width:0">${colOH}</select>
+      <span style="color:var(--light);font-size:12px;flex-shrink:0">后插入</span>
+      <input type="number" id="addcol-count-${id}" value="${op.params?.count||1}" min="1" max="50">
+      <span style="color:var(--light);font-size:12px;flex-shrink:0">列</span>
+    </div>`;
+  }
+  return '';
+}
+
+// ══ OP MANAGEMENT ═════════════════════════════════
+function addOp(){
+  const type=document.getElementById('op-type-sel').value;
+  if(!type){toast('请先选择操作类型');return;}
+  addOpOfType(type);
+  document.getElementById('op-type-sel').value='';
+}
+
+function addOpOfType(type){
+  const id=++opCounter;
+  // prepend to front of this type group
+  const newOp={id,type,statusText:'待分析',statusClass:'',params:{}};
+  // find index of first op of this type and insert before it
+  const firstIdx=ops.findIndex(o=>o.type===type);
+  if(firstIdx===-1) ops.push(newOp);
+  else ops.splice(firstIdx,0,newOp);
+
+  renderTypeGroups();
+
+  // animate the new card
+  setTimeout(()=>{
+    const el=document.getElementById(`op-${id}`);
+    if(el){el.classList.add('new-anim');el.scrollIntoView({behavior:'smooth',block:'nearest'});}
+  },30);
+}
+
+function removeOp(id){
+  ops=ops.filter(o=>o.id!==id);
+  renderTypeGroups();
+}
+
+function clearOps(){
+  ops=[];opCounter=0;renderTypeGroups();toast('操作已清空');
+}
+
+function getOp(id){return ops.find(o=>o.id===id);}
+
+function setStatus(id,txt,cls){
+  const op=getOp(id);if(!op)return;
+  op.statusText=txt;op.statusClass=cls;
+  const el=document.getElementById(`op-stat-${id}`);
+  if(el){el.textContent=txt;el.className=`op-stat${cls?' '+cls:''}`;}
+}
+
+function setInfo(id,html){
+  const el=document.getElementById(`op-info-${id}`);if(el)el.innerHTML=html;
+}
+
+function saveDelColParams(id){
+  const op=getOp(id); if(!op) return;
+  const names=msGet(`dc-${id}`).map(v=>headers[parseInt(v)]||v);
+  op.params.colHeaders=[...names];
+}
+
+function restoreDelColSel(id,colHeaders){
+  const msId=`dc-${id}`;
+  const vals=colHeaders.map(name=>{const i=headers.indexOf(name);return i>=0?String(i):null;}).filter(v=>v!==null);
+  msSet(msId,vals);msRender(msId);
+}
+
+function rebuildSelectors(id){
+  const op=getOp(id);if(!op)return;
+  if(op.type==='delrow'){
+    const sel=document.getElementById(`delrow-col-${id}`);if(!sel)return;
+    const cur=sel.value;
+    sel.innerHTML=headers.map((h,i)=>`<option value="${i}">${esc(h)}</option>`).join('')+'<option value="__any__">任意列</option>';
+    sel.value=cur;
+  }
+  if(op.type==='addcol'){
+    const sel=document.getElementById(`addcol-after-${id}`);if(!sel)return;
+    const cur=sel.value;
+    sel.innerHTML=headers.map((h,i)=>`<option value="${i}">${esc(h)}</option>`).join('');
+    sel.value=cur;
+  }
+  if(op.type==='delcol'){
+    const msId=`dc-${id}`;
+    const prev=msGet(msId);
+    msCreate(msId,colOpts(),'请选择要删除的列…',`ms-c-${id}`,()=>saveDelColParams(id));
+    msSet(msId,prev);msRender(msId);
+  }
+}
+
+// ══ GLOBAL RUN ALL ════════════════════════════════
+async function runAll(mode){
+  if(!workingData.length){toast('请先导入文件');return;}
+  if(!ops.length){toast('暂无操作');return;}
+  for(const op of ops){
+    if(mode==='analyze'){
+      await analyzeOp(op.id);
+    } else {
+      const canExec=await analyzeOp(op.id);
+      if(canExec) await execOp(op.id);
+    }
+    await new Promise(r=>setTimeout(r,60));
+  }
+  toast(mode==='analyze'?'全部分析完成':'全部执行完成');
+}
+
+async function analyzeOp(id){
+  const op=getOp(id);if(!op)return false;
+  if(op.type==='dedup')  return analyzeDedup(id);
+  if(op.type==='replace')return analyzeReplace(id);
+  if(op.type==='delrow') return analyzeDelRow(id);
+  if(op.type==='delcol') return analyzeDelCol(id);
+  if(op.type==='addcol') return analyzeAddCol(id);
+  return false;
+}
+async function execOp(id){
+  const op=getOp(id);if(!op)return;
+  if(op.type==='dedup')  execDedup(id);
+  else if(op.type==='replace') execReplace(id);
+  else if(op.type==='delrow')  execDelRow(id);
+  else if(op.type==='delcol')  execDelCol(id);
+  else if(op.type==='addcol')  execAddCol(id);
+}
+
+// ══ DEDUP ══════════════════════════════════════════
+function dedupKey(row){return JSON.stringify(row.slice(3).map(String));}
+
+function analyzeDedup(id){
+  if(headers.length<=3){
+    setInfo(id,'<div class="info warn">列数不足4列，无法使用此规则</div>');
+    setStatus(id,'列数不足','warn');return false;
+  }
+  const data=workingData.slice(1);
+  const dupRows=[];
+  for(let i=1;i<data.length;i++){
+    if(dedupKey(data[i-1])===dedupKey(data[i])) dupRows.push(data[i]);
+  }
+  if(!dupRows.length){
+    setInfo(id,'<div class="info ok">✓ 无相邻重复行</div>');
+    setStatus(id,'无重复','ok');return false;
+  }
+  let html=`<div class="info warn">发现 <strong>${dupRows.length}</strong> 条相邻重复行（第4列起与上一行完全相同），执行后将删除：</div>`;
+  html+='<div class="tbl-wrap"><table><thead><tr>'+headers.map(h=>`<th>${esc(h)}</th>`).join('')+'</tr></thead><tbody>';
+  dupRows.forEach(row=>{html+='<tr class="dup-row">'+row.map(c=>`<td title="${esc(String(c))}">${c!==''?esc(String(c)):'—'}</td>`).join('')+'</tr>';});
+  html+='</tbody></table></div>';
+  setInfo(id,html);setStatus(id,`${dupRows.length} 条重复`,'warn');
+  return true;
+}
+function execDedup(id){
+  pushUndo('删除相邻重复行');
+  const newData=[workingData[0]];
+  const data=workingData.slice(1);
+  for(let i=0;i<data.length;i++){
+    if(i===0||dedupKey(data[i-1])!==dedupKey(data[i])) newData.push(data[i]);
+  }
+  const removed=workingData.length-newData.length;
+  workingData=newData;afterChange();
+  setInfo(id,`<div class="info ok">✓ 已删除 <strong>${removed}</strong> 条</div>`);
+  setStatus(id,`已删 ${removed} 条`,'ok');
+  toast(`已删除 ${removed} 条相邻重复行`);
+}
+
+// ══ REPLACE ════════════════════════════════════════
+function analyzeReplace(id){
+  const from=document.getElementById(`rep-from-${id}`)?.value||'';
+  if(!from){setInfo(id,'<div class="info warn">请填写查找内容</div>');return false;}
+  let count=0;
+  workingData.forEach(r=>r.forEach(c=>{if(String(c).includes(from))count++;}));
+  const to=document.getElementById(`rep-to-${id}`)?.value||'';
+  const op=getOp(id);if(op){op.params.from=from;op.params.to=to;}
+  if(!count){
+    setInfo(id,`<div class="info">未找到「${esc(from)}」</div>`);
+    setStatus(id,'无匹配','');return false;
+  }
+  setInfo(id,`<div class="info warn">找到 <strong>${count}</strong> 处，将替换为「${esc(to)||'（空）'}」</div>`);
+  setStatus(id,`${count} 处匹配`,'warn');
+  return true;
+}
+function execReplace(id){
+  const from=document.getElementById(`rep-from-${id}`)?.value||'';
+  const to=document.getElementById(`rep-to-${id}`)?.value||'';
+  pushUndo(`替换「${from}」`);
+  let count=0;
+  workingData=workingData.map(r=>r.map(c=>{
+    const s=String(c);if(s.includes(from)){count++;return s.replaceAll(from,to);}return c;
+  }));
+  afterChange();
+  setInfo(id,`<div class="info ok">✓ 已替换 <strong>${count}</strong> 处</div>`);
+  setStatus(id,`已替换 ${count}`,'ok');
+  toast(`已替换 ${count} 处`);
+}
+
+// ══ DEL ROW ════════════════════════════════════════
+function analyzeDelRow(id){
+  const colVal=document.getElementById(`delrow-col-${id}`)?.value||'__any__';
+  const kw=document.getElementById(`delrow-kw-${id}`)?.value||'';
+  if(!kw){setInfo(id,'<div class="info warn">请填写关键词</div>');return false;}
+  let count=0;
+  workingData.slice(1).forEach(r=>{
+    const hit=colVal==='__any__'?r.some(c=>String(c).includes(kw)):String(r[parseInt(colVal)]||'').includes(kw);
+    if(hit)count++;
+  });
+  const colName=colVal==='__any__'?'任意列':(headers[parseInt(colVal)]||colVal);
+  const op=getOp(id);if(op){op.params.colVal=colVal;op.params.colHeader=colVal!=='__any__'?(headers[parseInt(colVal)]||''):'__any__';op.params.kw=kw;}
+  if(!count){
+    setInfo(id,`<div class="info">在「${esc(colName)}」中未找到「${esc(kw)}」</div>`);
+    setStatus(id,'无匹配','');return false;
+  }
+  setInfo(id,`<div class="info warn">「${esc(colName)}」中找到 <strong>${count}</strong> 行含「${esc(kw)}」，将整行删除</div>`);
+  setStatus(id,`${count} 行匹配`,'warn');
+  return true;
+}
+function execDelRow(id){
+  const colVal=document.getElementById(`delrow-col-${id}`)?.value||'__any__';
+  const kw=document.getElementById(`delrow-kw-${id}`)?.value||'';
+  pushUndo(`删除含「${kw}」的行`);
+  let removed=0;
+  const newData=[workingData[0]];
+  workingData.slice(1).forEach(r=>{
+    const hit=colVal==='__any__'?r.some(c=>String(c).includes(kw)):String(r[parseInt(colVal)]||'').includes(kw);
+    if(hit)removed++;else newData.push(r);
+  });
+  workingData=newData;afterChange();
+  setInfo(id,`<div class="info ok">✓ 已删除 <strong>${removed}</strong> 行</div>`);
+  setStatus(id,`已删 ${removed} 行`,'ok');
+  toast(`已删除 ${removed} 行`);
+}
+
+// ══ DEL COL ════════════════════════════════════════
+function analyzeDelCol(id){
+  const sel=msGet(`dc-${id}`);
+  saveDelColParams(id);
+  if(!sel.length){setInfo(id,'');setStatus(id,'未选列','');return false;}
+  const names=sel.map(v=>headers[parseInt(v)]||v);
+  setInfo(id,`<div class="info warn">将删除 <strong>${sel.length}</strong> 列：${names.map(esc).join('、')}</div>`);
+  setStatus(id,`${sel.length} 列`,'warn');
+  return true;
+}
+function execDelCol(id){
+  const sel=msGet(`dc-${id}`).map(v=>parseInt(v)).sort((a,b)=>b-a);
+  if(!sel.length)return;
+  pushUndo(`删除 ${sel.length} 列`);
+  workingData=workingData.map(r=>{const row=[...r];sel.forEach(i=>row.splice(i,1));return row;});
+  afterChange();
+  setInfo(id,`<div class="info ok">✓ 已删除 <strong>${sel.length}</strong> 列</div>`);
+  setStatus(id,`已删 ${sel.length} 列`,'ok');
+  msI[`dc-${id}`]?.selected.clear();msRender(`dc-${id}`);
+  toast(`已删除 ${sel.length} 列`);
+}
+
+// ══ ADD COL ════════════════════════════════════════
+function analyzeAddCol(id){
+  if(!workingData.length)return false;
+  const afterIdx=parseInt(document.getElementById(`addcol-after-${id}`)?.value||0);
+  const count=Math.max(1,parseInt(document.getElementById(`addcol-count-${id}`)?.value||1));
+  const op=getOp(id);if(op){op.params.afterColHeader=headers[afterIdx]||'';op.params.count=count;}
+  setInfo(id,`<div class="info warn">将在「${esc(headers[afterIdx]||'')}」列后添加 <strong>${count}</strong> 个空白列</div>`);
+  setStatus(id,`+${count} 列`,'warn');
+  return true;
+}
+function execAddCol(id){
+  const afterIdx=parseInt(document.getElementById(`addcol-after-${id}`)?.value||0);
+  const count=Math.max(1,parseInt(document.getElementById(`addcol-count-${id}`)?.value||1));
+  pushUndo(`添加 ${count} 个空白列`);
+  workingData=workingData.map(r=>{const row=[...r];for(let i=0;i<count;i++)row.splice(afterIdx+1+i,0,'');return row;});
+  afterChange();
+  setInfo(id,`<div class="info ok">✓ 已添加 <strong>${count}</strong> 个空白列</div>`);
+  setStatus(id,`已添 ${count} 列`,'ok');
+  toast(`已添加 ${count} 个空白列`);
+}
+
+// ══ AFTER CHANGE ══════════════════════════════════
+function afterChange(){
+  refreshHeaders();renderStats();
+  ops.forEach(op=>rebuildSelectors(op.id));
+}
+
+// ══ CONFIG ════════════════════════════════════════
+function gatherConfig(){
+  return{
+    version:4,
+    operations:ops.map(op=>{
+      const c={type:op.type,params:{...op.params}};
+      if(op.type==='replace'){
+        c.params.from=document.getElementById(`rep-from-${op.id}`)?.value||'';
+        c.params.to=document.getElementById(`rep-to-${op.id}`)?.value||'';
+      }
+      if(op.type==='delrow'){
+        const colEl=document.getElementById(`delrow-col-${op.id}`);
+        const colIdx=colEl?.value||'__any__';
+        c.params.colVal=colIdx;
+        c.params.colHeader=colIdx!=='__any__'?(headers[parseInt(colIdx)]||''):'__any__';
+        c.params.kw=document.getElementById(`delrow-kw-${op.id}`)?.value||'';
+      }
+      if(op.type==='delcol'){
+        const sel=msGet(`dc-${op.id}`);
+        c.params.colHeaders=sel.map(v=>headers[parseInt(v)]||v);
+      }
+      if(op.type==='addcol'){
+        const idx=parseInt(document.getElementById(`addcol-after-${op.id}`)?.value||0);
+        c.params.afterColHeader=headers[idx]||'';
+        c.params.count=parseInt(document.getElementById(`addcol-count-${op.id}`)?.value||1);
+      }
+      return c;
+    })
+  };
+}
+
+function exportConfig(){
+  const cfg=gatherConfig();
+  const blob=new Blob([JSON.stringify(cfg,null,2)],{type:'application/json'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');a.href=url;a.download='scrub-config.json';a.click();
+  URL.revokeObjectURL(url);toast('配置已导出');
+}
+
+function importConfig(e){
+  const file=e.target.files[0];if(!file)return;
+  const reader=new FileReader();
+  reader.onload=ev=>{
+    try{
+      const cfg=JSON.parse(ev.target.result);
+      if(!cfg.version||!cfg.operations){toast('配置格式不兼容');return;}
+      clearOps();
+      cfg.operations.forEach(item=>{
+        const id=++opCounter;
+        ops.push({id,type:item.type,statusText:'待分析',statusClass:'',params:item.params||{}});
+      });
+      renderTypeGroups();
+      document.getElementById('cfg-status').textContent='配置已导入 ✓';
+      toast('配置导入成功');
+    }catch(err){toast('配置文件格式错误');}
+  };
+  reader.readAsText(file);e.target.value='';
+}
+
+// ══ EXPORT FILE ═══════════════════════════════════
+function exportFile(){
+  if(!workingData.length){toast('没有数据可导出');return;}
+  const ws=XLSX.utils.aoa_to_sheet(workingData);
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,'Sheet1');
+  XLSX.writeFile(wb,`${fileName}_处理后.xlsx`);
+  toast('文件已下载');
+}
+
+// ══ UTILS ═════════════════════════════════════════
+function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function toast(msg){
+  const el=document.getElementById('toast');
+  el.textContent=msg;el.classList.add('show');
+  clearTimeout(el._t);el._t=setTimeout(()=>el.classList.remove('show'),2500);
+}
+</script>
+</body>
+</html>

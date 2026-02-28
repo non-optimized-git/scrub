@@ -1,0 +1,53 @@
+# Scrub Excel Processor
+
+轻量级 Excel 数据清洗工具（纯前端），支持单文件版与拆分版。
+
+## 目录结构
+
+- `excel-processor-6/index.html`：拆分版入口（引用 `assets/css` 和 `assets/js`）
+- `excel-processor-6/standalone.html`：单文件独立版
+- `excel-processor-6/assets/css/styles.css`：样式文件
+- `excel-processor-6/assets/js/app.js`：核心逻辑
+- `excel-processor-6/demo/`：演示数据、讲解脚本、语音音频
+
+## 核心功能
+
+- 导入 Excel/CSV（`.xlsx/.xls/.csv`）
+- 操作类型（均支持先分析再执行）
+  - 删除相邻重复行（从第4列开始比对）
+  - 文字替换
+  - 删除包含关键词的整行
+  - 删除列（多选）
+  - 在指定列后添加空白列
+- 一键 `全部分析` / `全部处理`
+- 撤回上一步
+- 导入/导出处理配置（JSON）
+- 导出处理后 Excel
+
+## UI 说明
+
+- 每个操作类型在卡片开头有独立矢量图标，便于快速识别。
+- 同一类型可添加多条二级分析条目。
+
+## 如何使用
+
+1. 打开 `excel-processor-6/index.html`（或 `standalone.html`）。
+2. 导入数据文件。
+3. 添加并配置清洗规则。
+4. 先点“全部分析”确认命中。
+5. 再点“全部处理”执行。
+6. 点击下载导出结果。
+
+## 演示素材
+
+位于 `excel-processor-6/demo/`：
+
+- `scrub-demo-orders-v2.xlsx`：真实感模拟订单数据
+- `功能介绍脚本-核心精简版.txt`：核心流程讲解稿
+- `功能介绍-核心精简版-正常语速.mp3`：约 65 秒讲解音频
+- `功能介绍-核心极简版-正常语速.mp3`：约 44 秒讲解音频
+
+## 备注
+
+- 工具为纯前端实现，数据处理在本地浏览器完成。
+- 推荐优先使用 `index.html` 进行维护，`standalone.html` 用于分发。
