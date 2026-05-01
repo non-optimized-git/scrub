@@ -8,7 +8,7 @@ from openpyxl import Workbook
 
 random.seed(20260227)
 
-out_file = Path('/Users/yuanyi.li/Documents/Scrub/excel-processor-6/demo/scrub-demo-orders-v2.xlsx')
+out_file = Path(__file__).with_name('scrub-demo-orders-v2.xlsx')
 
 headers = [
     '门店', '渠道', '下单日期', '订单号', '客户姓名', '手机号', '省市', '商品名称', '规格', '数量', '单价', '订单金额',

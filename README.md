@@ -4,11 +4,11 @@
 
 ## 目录结构
 
-- `excel-processor-6/index.html`：拆分版入口（引用 `assets/css` 和 `assets/js`）
-- `excel-processor-6/standalone.html`：单文件独立版
-- `excel-processor-6/assets/css/styles.css`：样式文件
-- `excel-processor-6/assets/js/app.js`：核心逻辑
-- `excel-processor-6/demo/`：演示数据、讲解脚本、语音音频
+- `index.html`：拆分版入口（引用 `assets/css` 和 `assets/js`）
+- `standalone.html`：单文件独立版
+- `assets/css/styles.css`：样式文件
+- `assets/js/app.js`：核心逻辑
+- `demo/`：演示数据、讲解脚本、语音音频
 
 ## 核心功能
 
@@ -31,7 +31,7 @@
 
 ## 如何使用
 
-1. 打开 `excel-processor-6/index.html`（或 `standalone.html`）。
+1. 打开 `index.html`（或 `standalone.html`）。
 2. 导入数据文件。
 3. 添加并配置清洗规则。
 4. 先点“全部分析”确认命中。
@@ -40,7 +40,7 @@
 
 ## 演示素材
 
-位于 `excel-processor-6/demo/`：
+位于 `demo/`：
 
 - `scrub-demo-orders-v2.xlsx`：真实感模拟订单数据
 - `功能介绍脚本-核心精简版.txt`：核心流程讲解稿
