@@ -10,9 +10,12 @@
 body{font-family:'Noto Sans SC','PingFang SC',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;font-size:14px;font-weight:300;line-height:1.7}
 
 /* ── Header ── */
-header{background:var(--card);border-bottom:1px solid var(--border);padding:18px 40px;display:flex;align-items:baseline;gap:12px}
+header{background:var(--card);border-bottom:1px solid var(--border);padding:14px 40px;display:flex;align-items:center;justify-content:space-between;gap:16px}
+.hd-brand{display:flex;align-items:baseline;gap:12px}
 header h1{font-family:'Noto Serif SC',serif;font-weight:300;font-size:17px;letter-spacing:.1em;color:var(--accent)}
 header .sub{font-size:11px;color:var(--light);letter-spacing:.12em}
+.hd-actions{display:flex;align-items:center;gap:8px;flex-shrink:0}
+.hd-sep{width:1px;height:16px;background:var(--bl);margin:0 2px;flex-shrink:0}
 
 /* ── Layout ── */
 .main{max-width:900px;margin:0 auto;padding:28px 20px;display:flex;flex-direction:column;gap:14px}
@@ -53,17 +56,16 @@ header .sub{font-size:11px;color:var(--light);letter-spacing:.12em}
 .stat .val{font-size:19px;font-family:'Noto Serif SC',serif;color:var(--accent)}
 .stat .lbl{font-size:11px;color:var(--muted);letter-spacing:.04em}
 
-/* ── Add-op bar (ABOVE ops card, outside) ── */
-.add-op-bar{
-  display:flex;gap:8px;align-items:center;flex-wrap:wrap;
+/* ── Type pills (ABOVE ops card, outside) ── */
+.pills-bar{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.pills-lbl{font-size:11px;color:var(--light);letter-spacing:.08em;margin-right:2px}
+.pill{
+  border:1px solid var(--border);border-radius:20px;
+  padding:4px 13px;font-size:11px;font-family:inherit;font-weight:300;
+  background:var(--card);color:var(--muted);cursor:pointer;
+  transition:all .15s;letter-spacing:.03em;white-space:nowrap;
 }
-.op-type-sel{
-  border:1px solid var(--border);border-radius:2px;padding:7px 10px;
-  font-size:12px;font-family:inherit;font-weight:300;
-  background:var(--card);color:var(--text);outline:none;
-  flex:1;min-width:180px;transition:border-color .15s;cursor:pointer;
-}
-.op-type-sel:focus{border-color:var(--accent)}
+.pill:hover{background:var(--accent);color:white;border-color:var(--accent)}
 
 /* ── Global action bar (inside ops card, top) ── */
 .global-bar{

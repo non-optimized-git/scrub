@@ -49,7 +49,7 @@ function handleFile(file) {
     showFileLoaded(file);
     renderStats();
     document.getElementById('stats-wrap').style.display = 'block';
-    document.getElementById('add-op-wrap').style.display = 'block';
+    document.getElementById('type-pills').style.display = 'block';
     document.getElementById('ops-card').style.display = 'block';
     document.getElementById('btn-export').disabled = false;
     ops.forEach(op=>rebuildSelectors(op.id));
@@ -85,7 +85,7 @@ function clearFile() {
     </div>`;
   initDropZone();
   document.getElementById('stats-wrap').style.display='none';
-  document.getElementById('add-op-wrap').style.display='none';
+  document.getElementById('type-pills').style.display='none';
   document.getElementById('ops-card').style.display='none';
   document.getElementById('btn-export').disabled=true;
   renderStats();
@@ -127,7 +127,7 @@ function msRender(msId){
       </div>
     </div>`;
   // tags go into op-info-row (extract opId from msId: dc-{id})
-  const opId=msId.startsWith('dc-')?msId.slice(3):null;
+  const opId=(msId.startsWith('dc-')||msId.startsWith('dd-'))?msId.slice(3):null;
   if(opId){
     const infoEl=document.getElementById(`op-info-${opId}`);
     if(infoEl){
@@ -174,6 +174,27 @@ function msGet(msId){return[...(msI[msId]?.selected||[])];}
 function msSet(msId,values){const inst=msI[msId];if(!inst)return;inst.selected.clear();values.forEach(v=>inst.selected.add(v));}
 function colOpts(){return headers.map((h,i)=>({value:String(i),label:h}));}
 
+function snapshotAllParams(){
+  ops.forEach(op=>{
+    if(op.type==='replace'){
+      op.params.from=document.getElementById(`rep-from-${op.id}`)?.value??op.params.from??'';
+      op.params.to  =document.getElementById(`rep-to-${op.id}`)?.value  ??op.params.to  ??'';
+    }
+    if(op.type==='delrow'){
+      const colEl=document.getElementById(`delrow-col-${op.id}`);
+      if(colEl){const ci=colEl.value||'__any__';op.params.colVal=ci;op.params.colHeader=ci!=='__any__'?(headers[parseInt(ci)]||''):'__any__';}
+      op.params.kw=document.getElementById(`delrow-kw-${op.id}`)?.value??op.params.kw??'';
+    }
+    if(op.type==='dedup') saveDeudpParams(op.id);
+    if(op.type==='delcol') saveDelColParams(op.id);
+    if(op.type==='addcol'){
+      const ai=parseInt(document.getElementById(`addcol-after-${op.id}`)?.value||0);
+      if(!isNaN(ai)) op.params.afterColHeader=headers[ai]??op.params.afterColHeader??'';
+      op.params.count=parseInt(document.getElementById(`addcol-count-${op.id}`)?.value||op.params.count||1);
+    }
+  });
+}
+
 // ══ UNDO ══════════════════════════════════════════
 function pushUndo(desc){
   undoStack.push({data:workingData.map(r=>[...r]),desc});
@@ -207,7 +228,6 @@ function renderTypeGroups(){
     html+=`<div class="type-group" id="tg-${type}">
       <div class="type-group-hd">
         <span class="type-name">${OP_NAMES[type]}</span>
-        <button class="add-same" onclick="addOpOfType('${type}')">＋ 再添一条</button>
       </div>
       <div class="op-cards" id="tg-cards-${type}">
         ${group.map((op,idx)=>opCardHTML(op,idx+1)).join('')}
@@ -217,8 +237,13 @@ function renderTypeGroups(){
   container.innerHTML=html;
 
   // init multi-selects
+  ops.filter(op=>op.type==='dedup').forEach(op=>{
+    msCreate(`dd-${op.id}`,colOpts(),'全部列（默认）',`ms-dd-${op.id}`,()=>{saveDeudpParams(op.id);analyzeDedup(op.id);});
+    if(op.params?.colHeaders?.length) restoreDeudpSel(op.id,op.params.colHeaders);
+    else msRender(`dd-${op.id}`);
+  });
   ops.filter(op=>op.type==='delcol').forEach(op=>{
-    msCreate(`dc-${op.id}`,colOpts(),'请选择要删除的列…',`ms-c-${op.id}`,()=>saveDelColParams(op.id));
+    msCreate(`dc-${op.id}`,colOpts(),'请选择要删除的列…',`ms-c-${op.id}`,()=>{saveDelColParams(op.id);analyzeDelCol(op.id);});
     if(op.params?.colHeaders?.length) restoreDelColSel(op.id,op.params.colHeaders);
     else msRender(`dc-${op.id}`);
   });
@@ -254,21 +279,21 @@ function opCardHTML(op, seqInGroup){
 function controlsHTML(op){
   const id=op.id;
   if(op.type==='dedup'){
-    return `<span style="font-size:12px;color:var(--light)">第4列起相邻行完全相同则删除</span>`;
+    return `<div class="frow"><span style="font-size:12px;color:var(--muted);flex-shrink:0;white-space:nowrap">比对列</span><div id="ms-dd-${id}" style="flex:1;min-width:0"></div></div>`;
   }
   if(op.type==='replace'){
     return `<div class="frow">
-      <input type="text" id="rep-from-${id}" placeholder="查找" value="${esc(op.params?.from||'')}" style="flex:1;min-width:80px">
+      <input type="text" id="rep-from-${id}" placeholder="查找" value="${esc(op.params?.from||'')}" oninput="analyzeReplace(${id})" style="flex:1;min-width:80px">
       <span style="color:var(--light);font-size:12px;flex-shrink:0">→</span>
-      <input type="text" id="rep-to-${id}" placeholder="替换为（空则删除）" value="${esc(op.params?.to||'')}" style="flex:1.4;min-width:80px">
+      <input type="text" id="rep-to-${id}" placeholder="替换为（空则删除）" value="${esc(op.params?.to||'')}" oninput="analyzeReplace(${id})" style="flex:1.4;min-width:80px">
     </div>`;
   }
   if(op.type==='delrow'){
     const colOH=headers.map((h,i)=>`<option value="${i}">${esc(h)}</option>`).join('')+'<option value="__any__">任意列</option>';
     return `<div class="frow">
-      <select class="sel-single" id="delrow-col-${id}" style="flex:1;min-width:0">${colOH}</select>
+      <select class="sel-single" id="delrow-col-${id}" onchange="analyzeDelRow(${id})" style="flex:1;min-width:0">${colOH}</select>
       <span style="color:var(--light);font-size:12px;flex-shrink:0">含</span>
-      <input type="text" id="delrow-kw-${id}" placeholder="关键词" value="${esc(op.params?.kw||'')}" style="flex:1.5;min-width:60px">
+      <input type="text" id="delrow-kw-${id}" placeholder="关键词" value="${esc(op.params?.kw||'')}" oninput="analyzeDelRow(${id})" style="flex:1.5;min-width:60px">
       <span style="color:var(--light);font-size:12px;flex-shrink:0">则删行</span>
     </div>`;
   }
@@ -278,9 +303,9 @@ function controlsHTML(op){
   if(op.type==='addcol'){
     const colOH=headers.map((h,i)=>`<option value="${i}">${esc(h)}</option>`).join('');
     return `<div class="frow">
-      <select class="sel-single" id="addcol-after-${id}" style="flex:1;min-width:0">${colOH}</select>
+      <select class="sel-single" id="addcol-after-${id}" onchange="analyzeAddCol(${id})" style="flex:1;min-width:0">${colOH}</select>
       <span style="color:var(--light);font-size:12px;flex-shrink:0">后插入</span>
-      <input type="number" id="addcol-count-${id}" value="${op.params?.count||1}" min="1" max="50">
+      <input type="number" id="addcol-count-${id}" value="${op.params?.count||1}" min="1" max="50" oninput="analyzeAddCol(${id})">
       <span style="color:var(--light);font-size:12px;flex-shrink:0">列</span>
     </div>`;
   }
@@ -288,32 +313,25 @@ function controlsHTML(op){
 }
 
 // ══ OP MANAGEMENT ═════════════════════════════════
-function addOp(){
-  const type=document.getElementById('op-type-sel').value;
-  if(!type){toast('请先选择操作类型');return;}
-  addOpOfType(type);
-  document.getElementById('op-type-sel').value='';
-}
-
 function addOpOfType(type){
+  snapshotAllParams();
   const id=++opCounter;
-  // prepend to front of this type group
   const newOp={id,type,statusText:'待分析',statusClass:'',params:{}};
-  // find index of first op of this type and insert before it
   const firstIdx=ops.findIndex(o=>o.type===type);
   if(firstIdx===-1) ops.push(newOp);
   else ops.splice(firstIdx,0,newOp);
 
   renderTypeGroups();
 
-  // animate the new card
   setTimeout(()=>{
     const el=document.getElementById(`op-${id}`);
     if(el){el.classList.add('new-anim');el.scrollIntoView({behavior:'smooth',block:'nearest'});}
+    if(type==='dedup'||type==='addcol') analyzeOp(id);
   },30);
 }
 
 function removeOp(id){
+  snapshotAllParams();
   ops=ops.filter(o=>o.id!==id);
   renderTypeGroups();
 }
@@ -335,6 +353,19 @@ function setInfo(id,html){
   const el=document.getElementById(`op-info-${id}`);if(el)el.innerHTML=html;
 }
 
+function saveDeudpParams(id){
+  const op=getOp(id); if(!op) return;
+  op.params.colHeaders=msGet(`dd-${id}`).map(v=>headers[parseInt(v)]||v);
+}
+function restoreDeudpSel(id,colHeaders){
+  const vals=colHeaders.map(name=>{const i=headers.indexOf(name);return i>=0?String(i):null;}).filter(v=>v!==null);
+  msSet(`dd-${id}`,vals);msRender(`dd-${id}`);
+}
+function getDeudpIndices(id){
+  const sel=msGet(`dd-${id}`);
+  return sel.length?sel.map(v=>parseInt(v)):null;
+}
+
 function saveDelColParams(id){
   const op=getOp(id); if(!op) return;
   const names=msGet(`dc-${id}`).map(v=>headers[parseInt(v)]||v);
@@ -349,6 +380,11 @@ function restoreDelColSel(id,colHeaders){
 
 function rebuildSelectors(id){
   const op=getOp(id);if(!op)return;
+  if(op.type==='dedup'){
+    const prev=msGet(`dd-${id}`);
+    msCreate(`dd-${id}`,colOpts(),'全部列（默认）',`ms-dd-${id}`,()=>{saveDeudpParams(id);analyzeDedup(id);});
+    msSet(`dd-${id}`,prev);msRender(`dd-${id}`);
+  }
   if(op.type==='delrow'){
     const sel=document.getElementById(`delrow-col-${id}`);if(!sel)return;
     const cur=sel.value;
@@ -404,23 +440,24 @@ async function execOp(id){
 }
 
 // ══ DEDUP ══════════════════════════════════════════
-function dedupKey(row){return JSON.stringify(row.slice(3).map(String));}
+function dedupKey(row,indices){
+  return JSON.stringify(indices?indices.map(i=>String(row[i]??'')):row.map(String));
+}
 
 function analyzeDedup(id){
-  if(headers.length<=3){
-    setInfo(id,'<div class="info warn">列数不足4列，无法使用此规则</div>');
-    setStatus(id,'列数不足','warn');return false;
-  }
+  if(workingData.length<=1){setStatus(id,'待分析','');return false;}
+  const indices=getDeudpIndices(id);
+  const colDesc=indices?`按选定 ${indices.length} 列比对`:' 按全部列比对';
   const data=workingData.slice(1);
   const dupRows=[];
   for(let i=1;i<data.length;i++){
-    if(dedupKey(data[i-1])===dedupKey(data[i])) dupRows.push(data[i]);
+    if(dedupKey(data[i-1],indices)===dedupKey(data[i],indices)) dupRows.push(data[i]);
   }
   if(!dupRows.length){
-    setInfo(id,'<div class="info ok">✓ 无相邻重复行</div>');
+    setInfo(id,'');
     setStatus(id,'无重复','ok');return false;
   }
-  let html=`<div class="info warn">发现 <strong>${dupRows.length}</strong> 条相邻重复行（第4列起与上一行完全相同），执行后将删除：</div>`;
+  let html=`<div class="info warn">发现 <strong>${dupRows.length}</strong> 条相邻重复行（${colDesc}），执行后将删除：</div>`;
   html+='<div class="tbl-wrap"><table><thead><tr>'+headers.map(h=>`<th>${esc(h)}</th>`).join('')+'</tr></thead><tbody>';
   dupRows.forEach(row=>{html+='<tr class="dup-row">'+row.map(c=>`<td title="${esc(String(c))}">${c!==''?esc(String(c)):'—'}</td>`).join('')+'</tr>';});
   html+='</tbody></table></div>';
@@ -428,15 +465,16 @@ function analyzeDedup(id){
   return true;
 }
 function execDedup(id){
+  const indices=getDeudpIndices(id);
   pushUndo('删除相邻重复行');
   const newData=[workingData[0]];
   const data=workingData.slice(1);
   for(let i=0;i<data.length;i++){
-    if(i===0||dedupKey(data[i-1])!==dedupKey(data[i])) newData.push(data[i]);
+    if(i===0||dedupKey(data[i-1],indices)!==dedupKey(data[i],indices)) newData.push(data[i]);
   }
   const removed=workingData.length-newData.length;
   workingData=newData;afterChange();
-  setInfo(id,`<div class="info ok">✓ 已删除 <strong>${removed}</strong> 条</div>`);
+  setInfo(id,'');
   setStatus(id,`已删 ${removed} 条`,'ok');
   toast(`已删除 ${removed} 条相邻重复行`);
 }
@@ -444,16 +482,12 @@ function execDedup(id){
 // ══ REPLACE ════════════════════════════════════════
 function analyzeReplace(id){
   const from=document.getElementById(`rep-from-${id}`)?.value||'';
-  if(!from){setInfo(id,'<div class="info warn">请填写查找内容</div>');return false;}
+  if(!from){setStatus(id,'待分析','');return false;}
   let count=0;
   workingData.forEach(r=>r.forEach(c=>{if(String(c).includes(from))count++;}));
   const to=document.getElementById(`rep-to-${id}`)?.value||'';
   const op=getOp(id);if(op){op.params.from=from;op.params.to=to;}
-  if(!count){
-    setInfo(id,`<div class="info">未找到「${esc(from)}」</div>`);
-    setStatus(id,'无匹配','');return false;
-  }
-  setInfo(id,`<div class="info warn">找到 <strong>${count}</strong> 处，将替换为「${esc(to)||'（空）'}」</div>`);
+  if(!count){setStatus(id,'无匹配','');return false;}
   setStatus(id,`${count} 处匹配`,'warn');
   return true;
 }
@@ -466,7 +500,6 @@ function execReplace(id){
     const s=String(c);if(s.includes(from)){count++;return s.replaceAll(from,to);}return c;
   }));
   afterChange();
-  setInfo(id,`<div class="info ok">✓ 已替换 <strong>${count}</strong> 处</div>`);
   setStatus(id,`已替换 ${count}`,'ok');
   toast(`已替换 ${count} 处`);
 }
@@ -475,19 +508,14 @@ function execReplace(id){
 function analyzeDelRow(id){
   const colVal=document.getElementById(`delrow-col-${id}`)?.value||'__any__';
   const kw=document.getElementById(`delrow-kw-${id}`)?.value||'';
-  if(!kw){setInfo(id,'<div class="info warn">请填写关键词</div>');return false;}
+  if(!kw){setStatus(id,'待分析','');return false;}
   let count=0;
   workingData.slice(1).forEach(r=>{
     const hit=colVal==='__any__'?r.some(c=>String(c).includes(kw)):String(r[parseInt(colVal)]||'').includes(kw);
     if(hit)count++;
   });
-  const colName=colVal==='__any__'?'任意列':(headers[parseInt(colVal)]||colVal);
   const op=getOp(id);if(op){op.params.colVal=colVal;op.params.colHeader=colVal!=='__any__'?(headers[parseInt(colVal)]||''):'__any__';op.params.kw=kw;}
-  if(!count){
-    setInfo(id,`<div class="info">在「${esc(colName)}」中未找到「${esc(kw)}」</div>`);
-    setStatus(id,'无匹配','');return false;
-  }
-  setInfo(id,`<div class="info warn">「${esc(colName)}」中找到 <strong>${count}</strong> 行含「${esc(kw)}」，将整行删除</div>`);
+  if(!count){setStatus(id,'无匹配','');return false;}
   setStatus(id,`${count} 行匹配`,'warn');
   return true;
 }
@@ -502,7 +530,6 @@ function execDelRow(id){
     if(hit)removed++;else newData.push(r);
   });
   workingData=newData;afterChange();
-  setInfo(id,`<div class="info ok">✓ 已删除 <strong>${removed}</strong> 行</div>`);
   setStatus(id,`已删 ${removed} 行`,'ok');
   toast(`已删除 ${removed} 行`);
 }
@@ -511,9 +538,7 @@ function execDelRow(id){
 function analyzeDelCol(id){
   const sel=msGet(`dc-${id}`);
   saveDelColParams(id);
-  if(!sel.length){setInfo(id,'');setStatus(id,'未选列','');return false;}
-  const names=sel.map(v=>headers[parseInt(v)]||v);
-  setInfo(id,`<div class="info warn">将删除 <strong>${sel.length}</strong> 列：${names.map(esc).join('、')}</div>`);
+  if(!sel.length){setStatus(id,'未选列','');return false;}
   setStatus(id,`${sel.length} 列`,'warn');
   return true;
 }
@@ -523,7 +548,6 @@ function execDelCol(id){
   pushUndo(`删除 ${sel.length} 列`);
   workingData=workingData.map(r=>{const row=[...r];sel.forEach(i=>row.splice(i,1));return row;});
   afterChange();
-  setInfo(id,`<div class="info ok">✓ 已删除 <strong>${sel.length}</strong> 列</div>`);
   setStatus(id,`已删 ${sel.length} 列`,'ok');
   msI[`dc-${id}`]?.selected.clear();msRender(`dc-${id}`);
   toast(`已删除 ${sel.length} 列`);
@@ -535,7 +559,6 @@ function analyzeAddCol(id){
   const afterIdx=parseInt(document.getElementById(`addcol-after-${id}`)?.value||0);
   const count=Math.max(1,parseInt(document.getElementById(`addcol-count-${id}`)?.value||1));
   const op=getOp(id);if(op){op.params.afterColHeader=headers[afterIdx]||'';op.params.count=count;}
-  setInfo(id,`<div class="info warn">将在「${esc(headers[afterIdx]||'')}」列后添加 <strong>${count}</strong> 个空白列</div>`);
   setStatus(id,`+${count} 列`,'warn');
   return true;
 }
@@ -545,7 +568,6 @@ function execAddCol(id){
   pushUndo(`添加 ${count} 个空白列`);
   workingData=workingData.map(r=>{const row=[...r];for(let i=0;i<count;i++)row.splice(afterIdx+1+i,0,'');return row;});
   afterChange();
-  setInfo(id,`<div class="info ok">✓ 已添加 <strong>${count}</strong> 个空白列</div>`);
   setStatus(id,`已添 ${count} 列`,'ok');
   toast(`已添加 ${count} 个空白列`);
 }
@@ -572,6 +594,9 @@ function gatherConfig(){
         c.params.colVal=colIdx;
         c.params.colHeader=colIdx!=='__any__'?(headers[parseInt(colIdx)]||''):'__any__';
         c.params.kw=document.getElementById(`delrow-kw-${op.id}`)?.value||'';
+      }
+      if(op.type==='dedup'){
+        c.params.colHeaders=msGet(`dd-${op.id}`).map(v=>headers[parseInt(v)]||v);
       }
       if(op.type==='delcol'){
         const sel=msGet(`dc-${op.id}`);
@@ -608,7 +633,6 @@ function importConfig(e){
         ops.push({id,type:item.type,statusText:'待分析',statusClass:'',params:item.params||{}});
       });
       renderTypeGroups();
-      document.getElementById('cfg-status').textContent='配置已导入 ✓';
       toast('配置导入成功');
     }catch(err){toast('配置文件格式错误');}
   };

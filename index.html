@@ -9,8 +9,17 @@
 <body>
 
 <header>
-  <h1>数刷 Scrub</h1>
-  <span class="sub">数据清洗大师</span>
+  <div class="hd-brand">
+    <h1>数刷 Scrub</h1>
+    <span class="sub">数据清洗大师</span>
+  </div>
+  <div class="hd-actions">
+    <button class="btn sm" onclick="document.getElementById('cfg-input').click()">导入配置</button>
+    <button class="btn sm" onclick="exportConfig()">导出配置</button>
+    <div class="hd-sep"></div>
+    <button class="btn pri sm" onclick="exportFile()" id="btn-export" disabled>导出文件</button>
+    <input type="file" id="cfg-input" accept=".json" style="display:none" onchange="importConfig(event)">
+  </div>
 </header>
 
 <div class="main">
@@ -33,18 +42,15 @@
     </div>
   </div>
 
-  <!-- ADD-OP BAR (outside, above ops card) -->
-  <div id="add-op-wrap" style="display:none">
-    <div class="add-op-bar">
-      <select class="op-type-sel" id="op-type-sel">
-        <option value="">选择操作类型…</option>
-        <option value="dedup">删除相邻重复行（第4列起）</option>
-        <option value="replace">文字替换</option>
-        <option value="delrow">删除含关键词的整行</option>
-        <option value="delcol">删除列</option>
-        <option value="addcol">在某列后添加空白列</option>
-      </select>
-      <button class="btn pri sm" onclick="addOp()">＋ 添加</button>
+  <!-- TYPE PILLS (outside, above ops card) -->
+  <div id="type-pills" style="display:none">
+    <div class="pills-bar">
+      <span class="pills-lbl">添加操作</span>
+      <button class="pill" onclick="addOpOfType('dedup')">去重</button>
+      <button class="pill" onclick="addOpOfType('replace')">替换</button>
+      <button class="pill" onclick="addOpOfType('delrow')">删行</button>
+      <button class="pill" onclick="addOpOfType('delcol')">删列</button>
+      <button class="pill" onclick="addOpOfType('addcol')">加列</button>
     </div>
   </div>
 
@@ -54,42 +60,18 @@
 
     <!-- global bar -->
     <div class="global-bar">
-      <button class="btn sm" onclick="runAll('analyze')">▷ 全部分析</button>
-      <button class="btn sm danger" onclick="runAll('exec')">▶ 全部执行</button>
+      <button class="btn sm danger" onclick="runAll('exec')">▶ 执行全部</button>
       <div class="global-sep"></div>
       <button class="btn sm" id="btn-undo" onclick="undoLast()" disabled>↩ 撤回</button>
       <span id="undo-label" style="font-size:11px;color:var(--light)"></span>
+      <div class="global-sep"></div>
+      <button class="btn sm" onclick="clearOps()">清空操作</button>
     </div>
 
     <div id="type-groups"></div>
     <div id="ops-empty" class="empty-hint" style="display:none">暂无操作，从上方添加</div>
   </div>
 
-  <!-- CONFIG -->
-  <div class="card">
-    <div class="card-hd"><h2>配置管理</h2><span class="step">STEP 03</span></div>
-    <div class="card-bd">
-      <p style="font-size:12px;color:var(--muted);margin-bottom:12px">导出操作配置（含列名记忆），下次导入新文件后直接复用</p>
-      <div class="cfg-row">
-        <button class="btn pri sm" onclick="exportConfig()">导出配置</button>
-        <button class="btn sm" onclick="document.getElementById('cfg-input').click()">导入配置</button>
-        <button class="btn sm" onclick="clearOps()">清空操作</button>
-        <input type="file" id="cfg-input" accept=".json" style="display:none" onchange="importConfig(event)">
-        <span id="cfg-status" style="font-size:11px;color:var(--muted)"></span>
-      </div>
-    </div>
-  </div>
-
-  <!-- EXPORT -->
-  <div class="card">
-    <div class="card-hd"><h2>导出文件</h2><span class="step">STEP 04</span></div>
-    <div class="card-bd">
-      <div style="display:flex;gap:12px;align-items:center">
-        <button class="btn pri" onclick="exportFile()" id="btn-export" disabled>下载处理后的文件</button>
-        <span style="font-size:12px;color:var(--muted)">文件名自动添加「_处理后」标识</span>
-      </div>
-    </div>
-  </div>
 
 </div>
 <div class="toast" id="toast"></div>
